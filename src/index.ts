@@ -1,4 +1,4 @@
-import init from './scenes/helloComputeThenRendering';
+import init from './scenes/helloComputeThenRender';
 const canvas = document.querySelector("canvas") as HTMLCanvasElement;
 
 
