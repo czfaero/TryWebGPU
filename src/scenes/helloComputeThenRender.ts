@@ -82,6 +82,8 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   function Update() {
 
     const commandEncoder = device.createCommandEncoder();
+
+    // Must create every time, or there would be 'Destroyed texture [Texture] used in a submit.'
     const textureView = context.getCurrentTexture().createView();
     const renderPassDescriptor: GPURenderPassDescriptor = {
       colorAttachments: [
