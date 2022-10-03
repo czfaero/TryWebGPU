@@ -3,7 +3,7 @@
 import wgsl from '../shaders/helloComputeThenRender.wgsl';
 
 
-import { GetVertex, GetIndices } from '../meshes/cube'
+import { GetVertex, GetIndices } from '../meshes/triangle'
 
 const init = async (canvasElement: HTMLCanvasElement) => {
   const adapter = await navigator.gpu.requestAdapter();
@@ -17,7 +17,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     format: presentationFormat,
     alphaMode: 'opaque',
   });
-  
+
   const vertex = GetVertex();
   const indices = GetIndices();
 
@@ -55,6 +55,13 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     vertex: {
       module: shaderModule,
       entryPoint: 'main_vert',
+      buffers: [
+        {
+          arrayStride: 12, attributes: [
+            { shaderLocation: 0, format: "float32x3", offset: 0 }
+          ]
+        } as GPUVertexBufferLayout
+      ]
     },
     fragment: {
       module: shaderModule,
@@ -70,11 +77,12 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     },
   });
 
+
+
   function Update() {
 
     const commandEncoder = device.createCommandEncoder();
     const textureView = context.getCurrentTexture().createView();
-
     const renderPassDescriptor: GPURenderPassDescriptor = {
       colorAttachments: [
         {
@@ -85,9 +93,11 @@ const init = async (canvasElement: HTMLCanvasElement) => {
         } as GPURenderPassColorAttachment
       ],
     };
-
     const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
     passEncoder.setPipeline(pipeline);
+
+    passEncoder.setVertexBuffer(0, vertexBuffer);
+    passEncoder.setIndexBuffer(indicesBuffer, 'uint32');
     passEncoder.draw(3, 1, 0, 0);
     passEncoder.end();
 
