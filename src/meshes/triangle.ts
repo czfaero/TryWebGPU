@@ -15,5 +15,13 @@ export const GetIndices = function () {
 
     return indices;
 }
+export const GetColors = function () {
+    const colors = new Float32Array([
+        1,0,0,
+        0,1,0,
+        0,0,1
+    ]);
+    return colors;
+}
 
 

@@ -3,7 +3,7 @@
 import wgsl from '../shaders/helloComputeThenRender.wgsl';
 
 
-import { GetVertex, GetIndices } from '../meshes/triangle'
+import { GetVertex, GetIndices, GetColors } from '../meshes/triangle'
 
 const init = async (canvasElement: HTMLCanvasElement) => {
   const adapter = await navigator.gpu.requestAdapter();
@@ -20,6 +20,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
   const vertex = GetVertex();
   const indices = GetIndices();
+  const colors = GetColors();
 
 
   // https://www.w3.org/TR/webgpu/#buffer-usage
@@ -28,6 +29,12 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
   });
 
+  const colorBuffer = device.createBuffer({
+    size: colors.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+  });
+
+
   const indicesBuffer = device.createBuffer({
     size: indices.byteLength,
     usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
@@ -35,6 +42,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
   device.queue.writeBuffer(vertexBuffer, 0, vertex);
   device.queue.writeBuffer(indicesBuffer, 0, indices);
+  device.queue.writeBuffer(colorBuffer, 0, colors);
 
 
   const shaderModule = device.createShaderModule({
@@ -60,6 +68,11 @@ const init = async (canvasElement: HTMLCanvasElement) => {
           arrayStride: 12, attributes: [
             { shaderLocation: 0, format: "float32x3", offset: 0 }
           ]
+        } as GPUVertexBufferLayout,
+        {
+          arrayStride: 12, attributes: [
+            { shaderLocation: 1, format: "float32x3", offset: 0 }
+          ]
         } as GPUVertexBufferLayout
       ]
     },
@@ -79,7 +92,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
 
 
-  function Update() {
+  function Update(time: DOMHighResTimeStamp) {
 
     const commandEncoder = device.createCommandEncoder();
 
@@ -99,8 +112,12 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     passEncoder.setPipeline(pipeline);
 
     passEncoder.setVertexBuffer(0, vertexBuffer);
+    passEncoder.setVertexBuffer(1, colorBuffer);
     passEncoder.setIndexBuffer(indicesBuffer, 'uint32');
-    passEncoder.draw(3, 1, 0, 0);
+
+    // https://www.w3.org/TR/webgpu/#rendering-operations
+    // draw(vertexCount, instanceCount, firstVertex, firstInstance)
+    passEncoder.draw(vertex.length / 3, 1, 0, 0);
     passEncoder.end();
 
     device.queue.submit([commandEncoder.finish()]);
