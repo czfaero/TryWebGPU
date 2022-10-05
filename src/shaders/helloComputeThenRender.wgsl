@@ -7,17 +7,22 @@
 fn main_comp(@builtin(global_invocation_id) tid : vec3<u32>) {
   const d = 1.0/60;
   var addr = tid.x * 3;
-  var i:u32=0;
-  for(;i<3;i++)
+  for(var i:u32 = 0; i<3; i++)
   {
     if(src[addr+i] == 0.0f 
        && src[addr+(i+1)%3] != 0.0f)
     {
-      dst[addr+i] = 0.0f;
-      var t = src[addr+(i+1)%3] - d;
-      dst[addr+(i+1)%3] = select(t, 0.0f, t<d);
-      dst[addr+(i+2)%3] = clamp(src[addr+(i+2)%3] + d, 0.0f, 1.0f);
-      break;
+        dst[addr+i] = 0.0f;
+        var t = src[addr+(i+1)%3] - d;
+        if(t<d){
+          dst[addr+(i+1)%3]=0.0f;
+          dst[addr+(i+2)%3]=1.0f;
+        }
+        else{
+          dst[addr+(i+1)%3] = t;
+          dst[addr+(i+2)%3] = clamp(src[addr+(i+2)%3] + d, 0.0f, 1.0f);
+        }
+        break;
     }
   }
 }
