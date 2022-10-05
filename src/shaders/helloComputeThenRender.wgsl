@@ -1,14 +1,25 @@
-// for helloCompute.ts
-struct Matrix {
-  size : vec2<f32>,
-  numbers: array<f32>,
-}
 
 
-@compute @workgroup_size(3, 4)
-fn main_comp(@builtin(global_invocation_id) global_id : vec3<u32>) {
+@group(0) @binding(0) var<storage, read> src: array<f32>;
+@group(0) @binding(1) var<storage, read_write> dst: array<f32>;
 
-
+@compute @workgroup_size(3, 1)
+fn main_comp(@builtin(global_invocation_id) tid : vec3<u32>) {
+  const d = 1.0/60;
+  var addr = tid.x * 3;
+  var i:u32=0;
+  for(;i<3;i++)
+  {
+    if(src[addr+i] == 0.0f 
+       && src[addr+(i+1)%3] != 0.0f)
+    {
+      dst[addr+i] = 0.0f;
+      var t = src[addr+(i+1)%3] - d;
+      dst[addr+(i+1)%3] = select(t, 0.0f, t<d);
+      dst[addr+(i+2)%3] = clamp(src[addr+(i+2)%3] + d, 0.0f, 1.0f);
+      break;
+    }
+  }
 }
 
 struct VSOut{

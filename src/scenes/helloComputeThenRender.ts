@@ -29,10 +29,15 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
   });
 
-  const colorBuffer = device.createBuffer({
+  const colorBuffer0 = device.createBuffer({
     size: colors.byteLength,
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   });
+  const colorBuffer1 = device.createBuffer({
+    size: colors.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE
+  });
+  const colorBuffers = [colorBuffer0, colorBuffer1];
 
 
   const indicesBuffer = device.createBuffer({
@@ -42,22 +47,38 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
   device.queue.writeBuffer(vertexBuffer, 0, vertex);
   device.queue.writeBuffer(indicesBuffer, 0, indices);
-  device.queue.writeBuffer(colorBuffer, 0, colors);
+  device.queue.writeBuffer(colorBuffer0, 0, colors);
 
+
+  // Compute 
 
   const shaderModule = device.createShaderModule({
     code: wgsl,
   })
   const computePipeline = device.createComputePipeline({
-    layout: device.createPipelineLayout({
-      bindGroupLayouts: []
-    }),
+    layout: 'auto',
     compute: {
       module: shaderModule,
       entryPoint: "main_comp"
     }
   });
+  const bindGroupLayout = computePipeline.getBindGroupLayout(0);
+  const bindGroup0 = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [
+      { binding: 0, resource: { buffer: colorBuffer0 } },
+      { binding: 1, resource: { buffer: colorBuffer1 } },
+    ]
+  });
+  const bindGroup1 = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [
+      { binding: 0, resource: { buffer: colorBuffer1 } },
+      { binding: 1, resource: { buffer: colorBuffer0 } },
+    ]
+  });
 
+  // Render
   const pipeline = device.createRenderPipeline({
     layout: 'auto',
     vertex: {
@@ -91,7 +112,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   });
 
 
-
+  let frameCount = 0;
   function Update(time: DOMHighResTimeStamp) {
 
     const commandEncoder = device.createCommandEncoder();
@@ -108,20 +129,27 @@ const init = async (canvasElement: HTMLCanvasElement) => {
         } as GPURenderPassColorAttachment
       ],
     };
-    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-    passEncoder.setPipeline(pipeline);
+    const computePassEncoder = commandEncoder.beginComputePass();
+    computePassEncoder.setPipeline(computePipeline);
+    computePassEncoder.setBindGroup(0, frameCount % 2 === 0 ? bindGroup0 : bindGroup1);
+    computePassEncoder.dispatchWorkgroups(3, 1);
+    computePassEncoder.end();
 
-    passEncoder.setVertexBuffer(0, vertexBuffer);
-    passEncoder.setVertexBuffer(1, colorBuffer);
-    passEncoder.setIndexBuffer(indicesBuffer, 'uint32');
 
+    const renderPassEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+    renderPassEncoder.setPipeline(pipeline);
+
+    renderPassEncoder.setVertexBuffer(0, vertexBuffer);
+    renderPassEncoder.setVertexBuffer(1, colorBuffers[frameCount % 2]);
+    renderPassEncoder.setIndexBuffer(indicesBuffer, 'uint32');
     // https://www.w3.org/TR/webgpu/#rendering-operations
     // draw(vertexCount, instanceCount, firstVertex, firstInstance)
-    passEncoder.draw(vertex.length / 3, 1, 0, 0);
-    passEncoder.end();
+    renderPassEncoder.draw(vertex.length / 3, 1, 0, 0);
+    renderPassEncoder.end();
 
     device.queue.submit([commandEncoder.finish()]);
     requestAnimationFrame(Update);
+    frameCount = (frameCount + 1) % 2;
   }
 
   requestAnimationFrame(Update);
