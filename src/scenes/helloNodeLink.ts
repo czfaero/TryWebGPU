@@ -4,7 +4,7 @@ import wgsl from '../shaders/helloNodeLink.wgsl';
 
 
 import { GetNodes, GetLinks, GetNodeColors } from '../diagrams/triangle'
-import { GetVertex, GetIndices, GetColors } from '../meshes/triangle'
+import { GetVertex, GetIndices } from '../meshes/cube'
 
 
 const init = async (canvasElement: HTMLCanvasElement) => {
@@ -148,25 +148,35 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   // uniform
   const aspect = presentationSize[0] / presentationSize[1];
   const projectionMatrix = mat4.create();
-  mat4.perspective(projectionMatrix, (2 * Math.PI) / 5, aspect, 1, 100.0);
-  const viewMatrix = mat4.create();
-  mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -12));
   const viewProjectionMatrix = mat4.create();
-  mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
-
   const uniformBufferSize = 4 * 4 * 4; // float32 4x4 matrix;
   const uniformBufferData = new Float32Array(uniformBufferSize / 4);
-  uniformBufferData.set(viewProjectionMatrix, 0);
+
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  device.queue.writeBuffer(
-    uniformBuffer,
-    0,
-    uniformBufferData
-  );
+  mat4.perspective(projectionMatrix, (2 * Math.PI) / 5, aspect, 1, 100.0);
+
+
+  let lastTime = performance.now();
+  let s = 0;
+  let axis = vec3.fromValues(0, 1, 0);
+  function UpdateView(time: DOMHighResTimeStamp) {
+    const deltaTime = time - lastTime;
+    s += deltaTime * 1000;// 1 rad per second
+    const viewMatrix = mat4.create();
+    mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -12));
+    mat4.rotate(viewMatrix, viewMatrix, s, axis);
+    mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
+    uniformBufferData.set(viewProjectionMatrix, 0);
+    device.queue.writeBuffer(
+      uniformBuffer,
+      0,
+      uniformBufferData
+    );
+  }
 
   const uniformBindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
@@ -182,7 +192,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
   let frameCount = 0;
   function Update(time: DOMHighResTimeStamp) {
-
+    UpdateView(time);
     const commandEncoder = device.createCommandEncoder();
 
     // Must create every time, or there would be 'Destroyed texture [Texture] used in a submit.'
