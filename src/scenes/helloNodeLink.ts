@@ -1,5 +1,5 @@
 /// <reference types="@webgpu/types" />
-import { mat4, vec3 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 import wgsl from '../shaders/helloNodeLink.wgsl';
 
 
@@ -11,12 +11,19 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
 
-  const context = canvasElement.getContext('webgpu') as GPUCanvasContext;
+  const context = canvasElement.getContext('webgpu') as unknown as GPUCanvasContext;
 
   const devicePixelRatio = window.devicePixelRatio || 1;
+  // const presentationSize = [
+  //   canvasElement.clientWidth * devicePixelRatio,
+  //   canvasElement.clientHeight * devicePixelRatio,
+  // ];
+  //Will cause: Attachment [TextureView] size does not match the size of the other attachments. 
+  //            - While validating depthStencilAttachment.
+
   const presentationSize = [
-    canvasElement.clientWidth * devicePixelRatio,
-    canvasElement.clientHeight * devicePixelRatio,
+    canvasElement.clientWidth,
+    canvasElement.clientHeight,
   ];
   const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 
@@ -142,13 +149,22 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     primitive: {
       topology: 'triangle-list',
     },
+    depthStencil: {
+      depthWriteEnabled: true,
+      depthCompare: 'less',
+      format: 'depth24plus',
+    },
   });
-
+  const depthTexture = device.createTexture({
+    size: presentationSize,
+    format: 'depth24plus',
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  });
 
   // uniform
   const aspect = presentationSize[0] / presentationSize[1];
   const projectionMatrix = mat4.create();
-  const viewProjectionMatrix = mat4.create();
+
   const uniformBufferSize = 4 * 4 * 4; // float32 4x4 matrix;
   const uniformBufferData = new Float32Array(uniformBufferSize / 4);
 
@@ -163,12 +179,25 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   let lastTime = performance.now();
   let s = 0;
   let axis = vec3.fromValues(0, 1, 0);
+  let frameCount = 0;
   function UpdateView(time: DOMHighResTimeStamp) {
-    const deltaTime = time - lastTime;
-    s += deltaTime * 1000;// 1 rad per second
+    const deltaTime = time - lastTime; //ms double
+    lastTime = time;
+    s += deltaTime * 0.001;// 1 rad per second
+    //console.log(s)
     const viewMatrix = mat4.create();
-    mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -12));
-    mat4.rotate(viewMatrix, viewMatrix, s, axis);
+    const rotation = quat.create();
+    const pos = vec3.fromValues(Math.sin(s) * 10, -1, Math.cos(s) * 10);
+    quat.fromEuler(rotation, 0, s / Math.PI * 180, 0)
+    mat4.fromRotationTranslation(
+      viewMatrix,
+      rotation,
+      pos
+    );
+    // x: right y: up z: out screen
+    // view matrix = inverse of model matrix of camera
+    mat4.invert(viewMatrix, viewMatrix);
+    const viewProjectionMatrix = mat4.create();
     mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
     uniformBufferData.set(viewProjectionMatrix, 0);
     device.queue.writeBuffer(
@@ -176,6 +205,12 @@ const init = async (canvasElement: HTMLCanvasElement) => {
       0,
       uniformBufferData
     );
+
+    frameCount = (frameCount + 1);
+    if (frameCount >= 60) {
+      //console.log(`FPS:${1000 / deltaTime}`)
+      frameCount = 0;
+    }
   }
 
   const uniformBindGroup = device.createBindGroup({
@@ -190,23 +225,35 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     ],
   });
 
-  let frameCount = 0;
+
+
+
   function Update(time: DOMHighResTimeStamp) {
     UpdateView(time);
     const commandEncoder = device.createCommandEncoder();
 
     // Must create every time, or there would be 'Destroyed texture [Texture] used in a submit.'
     const textureView = context.getCurrentTexture().createView();
-    const renderPassDescriptor: GPURenderPassDescriptor = {
+
+    const renderPassDescriptor = {
       colorAttachments: [
         {
           view: textureView,
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+
+          clearValue: { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
           loadOp: 'clear',
           storeOp: 'store',
-        } as GPURenderPassColorAttachment
+        },
       ],
-    };
+      depthStencilAttachment: {
+        view: depthTexture.createView(),
+
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    } as GPURenderPassDescriptor;
+
     // const computePassEncoder = commandEncoder.beginComputePass();
     // computePassEncoder.setPipeline(computePipeline);
     // computePassEncoder.setBindGroup(0, frameCount % 2 === 0 ? bindGroup0 : bindGroup1);
@@ -218,15 +265,15 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     renderPassEncoder.setPipeline(pipeline);
     renderPassEncoder.setBindGroup(0, uniformBindGroup);
     renderPassEncoder.setVertexBuffer(0, vertexBuffer);
-    renderPassEncoder.setVertexBuffer(1, nodesBuffers[frameCount % 2]);
+    renderPassEncoder.setVertexBuffer(1, nodesBuffers[0]);
     renderPassEncoder.setVertexBuffer(2, nodeColorsBuffer);
     renderPassEncoder.setIndexBuffer(indicesBuffer, 'uint32');
-    renderPassEncoder.draw(vertex.length / 3, nodes.length / 3, 0, 0);
+    //renderPassEncoder.draw(vertex.length / 3, nodes.length / 3, 0, 0);
+    renderPassEncoder.drawIndexed(indices.length, nodes.length / 3);
     renderPassEncoder.end();
 
     device.queue.submit([commandEncoder.finish()]);
     requestAnimationFrame(Update);
-    //frameCount = (frameCount + 1) % 2;
   }
 
   requestAnimationFrame(Update);
