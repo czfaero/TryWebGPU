@@ -4,8 +4,6 @@ import wgsl from '../shaders/helloNodeLink.wgsl';
 
 
 import { GetNodes, GetLinks, GetNodeColors } from '../diagrams/triangle'
-import { GetVertex, GetIndices } from '../meshes/cube'
-
 
 const init = async (canvasElement: HTMLCanvasElement) => {
   const adapter = await navigator.gpu.requestAdapter();
@@ -44,19 +42,17 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   device.queue.writeBuffer(nodeColorsBuffer, 0, nodeColors);
 
   // For node
-  const vertex = GetVertex();
-  const indices = GetIndices();
-  const vertexBuffer = device.createBuffer({
-    size: vertex.byteLength,
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+  const vertexData = new Float32Array([
+    -1.0, -1.0, +1.0, -1.0, -1.0, +1.0,
+    -1.0, +1.0, +1.0, -1.0, +1.0, +1.0,
+  ]);
+  const quadVertexBuffer = device.createBuffer({
+    size: vertexData.byteLength,
+    usage: GPUBufferUsage.VERTEX,
+    mappedAtCreation: true,
   });
-  const indicesBuffer = device.createBuffer({
-    size: indices.byteLength,
-    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
-  });
-  device.queue.writeBuffer(vertexBuffer, 0, vertex);
-  device.queue.writeBuffer(indicesBuffer, 0, indices);
-
+  new Float32Array(quadVertexBuffer.getMappedRange()).set(vertexData);
+  quadVertexBuffer.unmap();
 
   // The node pos buffers for both computing and rendering
   const nodesBuffer0 = device.createBuffer({
@@ -106,12 +102,12 @@ const init = async (canvasElement: HTMLCanvasElement) => {
       entryPoint: 'main_node_vert',
       buffers: [
         {
-          arrayStride: 3 * 4,
+          arrayStride: 2 * 4, // vec2 float
           stepMode: 'vertex',
           attributes: [
             {
               // vertex positions
-              shaderLocation: 0, offset: 0, format: 'float32x3',
+              shaderLocation: 0, offset: 0, format: 'float32x2',
             }
           ],
         } as GPUVertexBufferLayout,
@@ -143,7 +139,21 @@ const init = async (canvasElement: HTMLCanvasElement) => {
       module: shaderModule,
       entryPoint: 'main_frag',
       targets: [
-        { format: presentationFormat },
+        {
+          format: presentationFormat,
+          blend: {
+            color: {
+              srcFactor: 'src-alpha',
+              dstFactor: 'one',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'zero',
+              dstFactor: 'one',
+              operation: 'add',
+            }
+          },
+        } as GPUColorTargetState,
       ],
     },
     primitive: {
@@ -165,7 +175,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   const aspect = presentationSize[0] / presentationSize[1];
   const projectionMatrix = mat4.create();
 
-  const uniformBufferSize = 4 * 4 * 4; // float32 4x4 matrix;
+  const uniformBufferSize = 4 * 4 * 4 + 4 * 3; //  float32 4x4 matrix, vec3<f32>;
   const uniformBufferData = new Float32Array(uniformBufferSize / 4);
 
   const uniformBuffer = device.createBuffer({
@@ -173,9 +183,14 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
+
   mat4.perspective(projectionMatrix, (2 * Math.PI) / 5, aspect, 1, 100.0);
 
+  // the world
+  const worldUp = vec3.fromValues(0, 1, 0);
+  const worldOrigin = vec3.fromValues(0, 0, 0);
 
+  let cameraDirection = vec3.create();
   let lastTime = performance.now();
   let s = 0;
   let axis = vec3.fromValues(0, 1, 0);
@@ -186,20 +201,22 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     s += deltaTime * 0.001;// 1 rad per second
     //console.log(s)
     const viewMatrix = mat4.create();
-    const rotation = quat.create();
     const pos = vec3.fromValues(Math.sin(s) * 10, -1, Math.cos(s) * 10);
-    quat.fromEuler(rotation, 0, s / Math.PI * 180, 0)
-    mat4.fromRotationTranslation(
+    vec3.subtract(cameraDirection, worldOrigin, pos);
+    vec3.normalize(cameraDirection, cameraDirection);
+    mat4.lookAt(
       viewMatrix,
-      rotation,
-      pos
+      pos,
+      worldOrigin,
+      worldUp
     );
     // x: right y: up z: out screen
     // view matrix = inverse of model matrix of camera
-    mat4.invert(viewMatrix, viewMatrix);
+    //mat4.invert(viewMatrix, viewMatrix);
     const viewProjectionMatrix = mat4.create();
     mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
     uniformBufferData.set(viewProjectionMatrix, 0);
+    uniformBufferData.set(cameraDirection, 4 * 4);
     device.queue.writeBuffer(
       uniformBuffer,
       0,
@@ -264,12 +281,10 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     const renderPassEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
     renderPassEncoder.setPipeline(pipeline);
     renderPassEncoder.setBindGroup(0, uniformBindGroup);
-    renderPassEncoder.setVertexBuffer(0, vertexBuffer);
+    renderPassEncoder.setVertexBuffer(0, quadVertexBuffer);
     renderPassEncoder.setVertexBuffer(1, nodesBuffers[0]);
     renderPassEncoder.setVertexBuffer(2, nodeColorsBuffer);
-    renderPassEncoder.setIndexBuffer(indicesBuffer, 'uint32');
-    //renderPassEncoder.draw(vertex.length / 3, nodes.length / 3, 0, 0);
-    renderPassEncoder.drawIndexed(indices.length, nodes.length / 3);
+    renderPassEncoder.draw(vertexData.length / 2, nodes.length / 3, 0, 0);
     renderPassEncoder.end();
 
     device.queue.submit([commandEncoder.finish()]);
