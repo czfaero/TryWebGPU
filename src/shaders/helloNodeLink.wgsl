@@ -19,8 +19,9 @@ fn main_node_vert(
   var output : VertexOutput;
   var right = cross(uniforms.cameraDirection, vec3(0,1,0)); //camera x world up
   var up = cross(right, uniforms.cameraDirection); // camera up
-  let wordPos=npos + right * quadPos.x + up * quadPos.y;
+  let wordPos = npos + right * quadPos.x + up * quadPos.y;
   output.Position = uniforms.viewProjectionMatrix * vec4(wordPos, 1.0);
+  // var normal = vec3(quadPos, sqrt(1 - dot(quadPos, quadPos)));
   output.color = color;
   output.quadPos = quadPos;
   return output;
@@ -32,6 +33,8 @@ fn main_frag(
   @location(0) color : vec3<f32>,
   @location(1) quadPos : vec2<f32>,
 ) -> @location(0) vec4<f32> {
-  var r : f32 = max(1 - length(quadPos), 0);
-  return vec4<f32>(color,r);
+  var l = 1 - dot(quadPos, quadPos);
+  var r : f32 = sign(l);
+  if(r < 0) { discard; }
+  return vec4<f32>(color * sqrt(l), 1);
 }

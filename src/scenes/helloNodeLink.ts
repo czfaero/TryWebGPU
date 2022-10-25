@@ -24,7 +24,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     canvasElement.clientHeight,
   ];
   const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-
+  console.log(presentationFormat);
   context.configure({
     device,
     format: presentationFormat,
@@ -142,9 +142,12 @@ const init = async (canvasElement: HTMLCanvasElement) => {
         {
           format: presentationFormat,
           blend: {
+            // The source color is the value written by the fragment shader. 
+            // The destination color is the color from the image in the framebuffer.
+            // https://www.khronos.org/opengl/wiki/Blending
             color: {
-              srcFactor: 'src-alpha',
-              dstFactor: 'one',
+              srcFactor: 'src',
+              dstFactor: 'zero',
               operation: 'add',
             },
             alpha: {
@@ -198,7 +201,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   function UpdateView(time: DOMHighResTimeStamp) {
     const deltaTime = time - lastTime; //ms double
     lastTime = time;
-    s += deltaTime * 0.001;// 1 rad per second
+    s += deltaTime * 0.002;// 2 rad per second
     //console.log(s)
     const viewMatrix = mat4.create();
     const pos = vec3.fromValues(Math.sin(s) * 10, -1, Math.cos(s) * 10);
@@ -264,7 +267,6 @@ const init = async (canvasElement: HTMLCanvasElement) => {
       ],
       depthStencilAttachment: {
         view: depthTexture.createView(),
-
         depthClearValue: 1.0,
         depthLoadOp: 'clear',
         depthStoreOp: 'store',
