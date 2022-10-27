@@ -197,7 +197,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   let lastTime = performance.now();
   let s = 0;
   let frameCount = 0;
-  const camera = new FPSController(vec3.fromValues(-120, 0, 0), vec3.fromValues(1, 0, 0));
+  const camera = new FPSController(vec3.fromValues(0, 0, 120), quat.create());
   function UpdateView(time: DOMHighResTimeStamp) {
     const deltaTime = (time - lastTime) / 1000; //ms -> second double
     lastTime = time;
@@ -205,7 +205,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
     const viewMatrix = mat4.create();
     const watchCenter = vec3.create();
-    vec3.add(watchCenter, camera.position, camera.direction);
+    vec3.add(watchCenter, camera.position, camera.front);
 
     mat4.lookAt(
       viewMatrix,
@@ -219,7 +219,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     const viewProjectionMatrix = mat4.create();
     mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
     uniformBufferData.set(viewProjectionMatrix, 0);
-    uniformBufferData.set(camera.direction, 4 * 4);
+    uniformBufferData.set(camera.front, 4 * 4);
     device.queue.writeBuffer(
       uniformBuffer,
       0,

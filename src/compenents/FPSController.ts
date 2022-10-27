@@ -1,27 +1,34 @@
 import { mat4, quat, vec3 } from 'gl-matrix';
-
+const originFront = vec3.fromValues(0, 0, -1);
+const originRight = vec3.fromValues(1, 0, 0);
 export class FPSController {
     startPosition: vec3;
-    startDirection: vec3;
+    startRotation: quat;
     position: vec3;
-    direction: vec3;
-    keyStatus: KeyStatus;
     rotation: quat;
-    up: vec3;
-    right: vec3;
-    constructor(startPos: vec3, startDirection: vec3) {
+    private _front: vec3;
+    private _right: vec3;
+    public get front() {
+        vec3.transformQuat(this._front, originFront, this.rotation);
+        return this._front;
+    }
+    public get right() {
+        vec3.transformQuat(this._right, originRight, this.rotation);
+        return this._right;
+    }
+    keyStatus: KeyStatus;
+    constructor(startPos: vec3, startRotation: quat) {
         this.startPosition = startPos;
         this.position = vec3.clone(this.startPosition);
-        this.startDirection = startDirection;
-        this.direction = vec3.clone(this.startDirection);
+        this.startRotation = startRotation;
+        this.rotation = quat.clone(startRotation);
         this.keyStatus = new KeyStatus();
-        this.up = vec3.fromValues(0, 1, 0);
-        this.right = vec3.create();
-        vec3.cross(this.right, this.direction, this.up);
+        this._front = vec3.create();
+        this._right = vec3.create();
     }
     Update(deltaTime: number) {
         const speed = 10;//1 per second
-        const rotationSpeed = 10;
+        const rotationSpeed = 1;
         if (this.keyStatus.A) {
             vec3.scaleAndAdd(this.position, this.position, this.right, -deltaTime * speed);
         }
@@ -29,18 +36,18 @@ export class FPSController {
             vec3.scaleAndAdd(this.position, this.position, this.right, deltaTime * speed);
         }
         if (this.keyStatus.W) {
-            vec3.scaleAndAdd(this.position, this.position, this.direction, deltaTime * speed);
+            vec3.scaleAndAdd(this.position, this.position, this.front, deltaTime * speed);
         }
         if (this.keyStatus.S) {
-            vec3.scaleAndAdd(this.position, this.position, this.direction, -deltaTime * speed);
+            vec3.scaleAndAdd(this.position, this.position, this.front, -deltaTime * speed);
         }
         if (this.keyStatus.Up) {
-
+         
         }
     }
     Reset() {
-        this.position = this.startPosition;
-        this.direction = this.startDirection;
+        this.position = vec3.clone(this.startPosition);
+        this.rotation = quat.clone(this.startRotation);
     }
 }
 
