@@ -1,9 +1,10 @@
 /// <reference types="@webgpu/types" />
 import { mat4, quat, vec3 } from 'gl-matrix';
 import wgsl from '../shaders/helloNodeLink.wgsl';
+import { FPSController } from '../compenents/FPSController';
 
 
-import { GetNodes, GetLinks, GetNodeColors } from '../diagrams/triangle'
+import { GetNodes, GetLinks, GetNodeColors } from '../diagrams/massive'
 
 const init = async (canvasElement: HTMLCanvasElement) => {
   const adapter = await navigator.gpu.requestAdapter();
@@ -187,30 +188,29 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   });
 
 
-  mat4.perspective(projectionMatrix, (2 * Math.PI) / 5, aspect, 1, 100.0);
+  mat4.perspective(projectionMatrix, (2 * Math.PI) / 5, aspect, 1, 300.0);
 
   // the world
   const worldUp = vec3.fromValues(0, 1, 0);
   const worldOrigin = vec3.fromValues(0, 0, 0);
 
-  let cameraDirection = vec3.create();
   let lastTime = performance.now();
   let s = 0;
-  let axis = vec3.fromValues(0, 1, 0);
   let frameCount = 0;
+  const camera = new FPSController(vec3.fromValues(-120, 0, 0), vec3.fromValues(1, 0, 0));
   function UpdateView(time: DOMHighResTimeStamp) {
-    const deltaTime = time - lastTime; //ms double
+    const deltaTime = (time - lastTime) / 1000; //ms -> second double
     lastTime = time;
-    s += deltaTime * 0.002;// 2 rad per second
-    //console.log(s)
+    camera.Update(deltaTime);
+
     const viewMatrix = mat4.create();
-    const pos = vec3.fromValues(Math.sin(s) * 10, -1, Math.cos(s) * 10);
-    vec3.subtract(cameraDirection, worldOrigin, pos);
-    vec3.normalize(cameraDirection, cameraDirection);
+    const watchCenter = vec3.create();
+    vec3.add(watchCenter, camera.position, camera.direction);
+
     mat4.lookAt(
       viewMatrix,
-      pos,
-      worldOrigin,
+      camera.position,
+      watchCenter,
       worldUp
     );
     // x: right y: up z: out screen
@@ -219,7 +219,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     const viewProjectionMatrix = mat4.create();
     mat4.multiply(viewProjectionMatrix, projectionMatrix, viewMatrix);
     uniformBufferData.set(viewProjectionMatrix, 0);
-    uniformBufferData.set(cameraDirection, 4 * 4);
+    uniformBufferData.set(camera.direction, 4 * 4);
     device.queue.writeBuffer(
       uniformBuffer,
       0,
@@ -228,9 +228,9 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
     frameCount = (frameCount + 1);
     if (frameCount >= 60) {
-      //console.log(`FPS:${1000 / deltaTime}`)
       frameCount = 0;
     }
+    logger.innerHTML = `FPS:${1 / deltaTime}`;
   }
 
   const uniformBindGroup = device.createBindGroup({
@@ -246,7 +246,8 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   });
 
 
-
+  const logger = document.createElement('div');
+  document.body.append(logger);
 
   function Update(time: DOMHighResTimeStamp) {
     UpdateView(time);
