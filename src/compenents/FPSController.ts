@@ -14,7 +14,6 @@ export class FPSController {
     rotationYDeg: number;
     public get front() {
         vec3.transformQuat(this._front, originFront, this.rotation);
-        console.log(vec3.length(this._front));
         return this._front;
     }
     public get right() {
