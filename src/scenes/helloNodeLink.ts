@@ -4,7 +4,7 @@ import wgsl from '../shaders/helloNodeLink.wgsl';
 import { FPSController } from '../compenents/FPSController';
 
 
-import { GetNodes, GetLinks, GetNodeColors } from '../diagrams/massive'
+import { GetNodes, GetLinks, GetNodeColors } from '../diagrams/triangle'
 
 const init = async (canvasElement: HTMLCanvasElement) => {
   const adapter = await navigator.gpu.requestAdapter();
@@ -43,16 +43,16 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   device.queue.writeBuffer(nodeColorsBuffer, 0, nodeColors);
 
   // For node
-  const vertexData = new Float32Array([
+  const quadVertexData = new Float32Array([
     -1.0, -1.0, +1.0, -1.0, -1.0, +1.0,
     -1.0, +1.0, +1.0, -1.0, +1.0, +1.0,
   ]);
   const quadVertexBuffer = device.createBuffer({
-    size: vertexData.byteLength,
+    size: quadVertexData.byteLength,
     usage: GPUBufferUsage.VERTEX,
     mappedAtCreation: true,
   });
-  new Float32Array(quadVertexBuffer.getMappedRange()).set(vertexData);
+  new Float32Array(quadVertexBuffer.getMappedRange()).set(quadVertexData);
   quadVertexBuffer.unmap();
 
   // The node pos buffers for both computing and rendering
@@ -66,6 +66,16 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   });
   const nodesBuffers = [nodesBuffer0, nodesBuffer1];
   device.queue.writeBuffer(nodesBuffer0, 0, nodes);
+
+
+
+  // Link
+  const linkBuffer = device.createBuffer({
+    size: links.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+  });
+  device.queue.writeBuffer(linkBuffer, 0, links);
+
 
   const shaderModule = device.createShaderModule({
     code: wgsl,
@@ -96,7 +106,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   // });
 
   // Render - nodes
-  const pipeline = device.createRenderPipeline({
+  const nodePipeline = device.createRenderPipeline({
     layout: 'auto',
     vertex: {
       module: shaderModule,
@@ -138,7 +148,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     },
     fragment: {
       module: shaderModule,
-      entryPoint: 'main_frag',
+      entryPoint: 'main_node_frag',
       targets: [
         {
           format: presentationFormat,
@@ -169,6 +179,67 @@ const init = async (canvasElement: HTMLCanvasElement) => {
       format: 'depth24plus',
     },
   });
+
+
+  // Render - links
+  const linkPipeline = device.createRenderPipeline({
+    layout: 'auto',
+    vertex: {
+      module: shaderModule,
+      entryPoint: 'main_link_vert',
+      buffers: [
+        {
+          arrayStride: 2 * 4, // vec2 float
+          stepMode: 'vertex',
+          attributes: [
+            {
+              // vertex positions
+              shaderLocation: 0, offset: 0, format: 'float32x2',
+            }
+          ],
+        } as GPUVertexBufferLayout,
+        {
+          arrayStride: 2 * 4, // vec2 u32
+          stepMode: 'instance',
+          attributes: [
+            {
+              shaderLocation: 1, offset: 0, format: 'uint32x2',
+            }
+          ],
+        } as GPUVertexBufferLayout
+      ],
+    },
+    fragment: {
+      module: shaderModule,
+      entryPoint: 'main_link_frag',
+      targets: [
+        {
+          format: presentationFormat,
+          blend: {
+            color: {
+              srcFactor: 'src',
+              dstFactor: 'zero',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'zero',
+              dstFactor: 'one',
+              operation: 'add',
+            }
+          },
+        } as GPUColorTargetState,
+      ],
+    },
+    primitive: {
+      topology: 'triangle-list',
+    },
+    depthStencil: {
+      depthWriteEnabled: true,
+      depthCompare: 'less',
+      format: 'depth24plus',
+    },
+  });
+
   const depthTexture = device.createTexture({
     size: presentationSize,
     format: 'depth24plus',
@@ -187,6 +258,35 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
+  const nodeBindGroup = device.createBindGroup({
+    layout: nodePipeline.getBindGroupLayout(0),
+    entries: [
+      {
+        binding: 0,
+        resource: {
+          buffer: uniformBuffer,
+        },
+      },
+    ],
+  });
+  const linkBindGroup = device.createBindGroup({
+    layout: linkPipeline.getBindGroupLayout(0),
+    entries: [
+      {
+        binding: 0,
+        resource: {
+          buffer: uniformBuffer,
+        },
+      },
+      {
+        binding: 1,
+        resource: {
+          buffer: nodesBuffer0,
+        },
+      }
+    ],
+  });
+
 
   mat4.perspective(projectionMatrix, (2 * Math.PI) / 5, aspect, 1, 300.0);
 
@@ -197,7 +297,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   let lastTime = performance.now();
   let s = 0;
   let frameCount = 0;
-  const camera = new FPSController(vec3.fromValues(0, 0, 120), quat.create());
+  const camera = new FPSController(vec3.fromValues(0, 0, 20), quat.create());
   function UpdateView(time: DOMHighResTimeStamp) {
     const deltaTime = (time - lastTime) / 1000; //ms -> second double
     lastTime = time;
@@ -232,19 +332,6 @@ const init = async (canvasElement: HTMLCanvasElement) => {
     }
     logger.innerHTML = `FPS:${1 / deltaTime}`;
   }
-
-  const uniformBindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
-    entries: [
-      {
-        binding: 0,
-        resource: {
-          buffer: uniformBuffer,
-        },
-      },
-    ],
-  });
-
 
   const logger = document.createElement('div');
   document.body.append(logger);
@@ -282,12 +369,17 @@ const init = async (canvasElement: HTMLCanvasElement) => {
 
 
     const renderPassEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-    renderPassEncoder.setPipeline(pipeline);
-    renderPassEncoder.setBindGroup(0, uniformBindGroup);
+    renderPassEncoder.setPipeline(nodePipeline);
+    renderPassEncoder.setBindGroup(0, nodeBindGroup);
     renderPassEncoder.setVertexBuffer(0, quadVertexBuffer);
     renderPassEncoder.setVertexBuffer(1, nodesBuffers[0]);
     renderPassEncoder.setVertexBuffer(2, nodeColorsBuffer);
-    renderPassEncoder.draw(vertexData.length / 2, nodes.length / 3, 0, 0);
+    renderPassEncoder.draw(quadVertexData.length / 2, nodes.length / 3, 0, 0);
+    renderPassEncoder.setPipeline(linkPipeline);
+    renderPassEncoder.setBindGroup(0, linkBindGroup);
+    renderPassEncoder.setVertexBuffer(1, linkBuffer);
+    renderPassEncoder.draw(quadVertexData.length / 2, links.length / 2, 0, 0);
+
     renderPassEncoder.end();
 
     device.queue.submit([commandEncoder.finish()]);
