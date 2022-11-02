@@ -40,7 +40,7 @@ export class FPSController {
     Update(deltaTime: number) {
         let tempQuat = quat.create();
         const speed = 20;//deg per second
-        const rotationSpeed = 10;
+        const rotationSpeed = 30;
         if (this.keyStatus.A) {
             vec3.scaleAndAdd(this.position, this.position, this.right, -deltaTime * speed);
         }
