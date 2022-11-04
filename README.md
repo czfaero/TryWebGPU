@@ -1,0 +1,5 @@
+# TryWebGPU
+
+```
+npm run debug
+```
