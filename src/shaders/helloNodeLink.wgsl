@@ -62,8 +62,20 @@ fn main_link_vert(
   var normal = cross(uniforms.cameraDirection, node0 - node1); 
   normal = normalize(normal);
 
+  let lineVec = node1 - node0;
+  let lineDir = normalize(lineVec);
 
-  let wordPos = node0 + (node1 - node0) * (quadPos.y + 1)/2 + normal * linkWidth * quadPos.x;
+
+  let d_cos = dot(lineDir, uniforms.cameraDirection);
+  let d_sin = sqrt(1-d_cos*d_cos);
+  let offset = min(abs(size/d_sin*d_cos), size); 
+
+
+  let wordPos = 
+      node0 + (lineVec) * (quadPos.y + 1)/2 // Pos at the line axis
+      + normal * linkWidth * quadPos.x // Pos at the width axis
+      + uniforms.cameraDirection * offset // move back lines basing on node size, to let lines behind linked node
+      ;
   output.Position = uniforms.viewProjectionMatrix * vec4(wordPos, 1.0);
   //output.Position = vec4(quadPos*0.1+0.25*vec2(f32(i_index),nodes[i_index+6]),0,1);//debug
   output.color = vec3(1,1,1);
