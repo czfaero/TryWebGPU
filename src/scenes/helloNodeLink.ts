@@ -4,7 +4,8 @@ import wgsl from '../shaders/helloNodeLink.wgsl';
 import { FPSController } from '../compenents/FPSController';
 
 
-import { GetNodes, GetLinks, GetNodeColors } from '../diagrams/MatrixMarketLoader'
+import { GetNodes, GetLinks, GetNodeColors, GetLinkWeights } from '../diagrams/MatrixMarketLoader'
+import { SGDRunner } from '../compenents/SGD';
 
 const init = async (canvasElement: HTMLCanvasElement) => {
   const adapter = await navigator.gpu.requestAdapter();
@@ -35,6 +36,11 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   // 
   const nodes = await GetNodes();
   const links = await GetLinks();
+  const linkWeights = await GetLinkWeights();
+
+const sgd= new SGDRunner(nodes,links,linkWeights);
+
+
   const nodeColors = await GetNodeColors();
   const nodeColorsBuffer = device.createBuffer({
     size: nodeColors.byteLength,

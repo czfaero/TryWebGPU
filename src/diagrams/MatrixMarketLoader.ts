@@ -1,7 +1,13 @@
 // https://math.nist.gov/MatrixMarket/formats.html
-
+class Link {
+    constructor(
+        i: number,
+        j: number,
+        v: number
+    ) { }
+}
 let rawData: string = null;
-let links: Array<any> = [];
+let links: Array<Link> = [];
 let size = 0;
 async function LoadData() {
     if (rawData) return;
@@ -45,6 +51,7 @@ export const GetLinks = async function () {
     const iterable = (function* () {
         let i: any;
         while ((i = itr.next()) && !i.done) {
+            if (i.value.i >= i.value.j) throw "i>=j";
             yield i.value.m;
             yield i.value.n;
         }
@@ -54,6 +61,23 @@ export const GetLinks = async function () {
     console.log(_links.length);
     return _links;
 }
+
+export const GetLinkWeights = async function () {
+    await LoadData();
+    const itr = links[Symbol.iterator]();
+    const iterable = (function* () {
+        let i: any;
+        while ((i = itr.next()) && !i.done) {
+            if (i.value.i >= i.value.j) throw "i>=j";
+            yield i.value.v;
+        }
+    })();
+
+    const _links = new Float32Array(iterable);
+    console.log(_links.length);
+    return _links;
+}
+
 export const GetNodeColors = async function () {
     await LoadData();
     const iterable = (function* () {
