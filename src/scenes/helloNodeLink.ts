@@ -38,7 +38,8 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   const links = await GetLinks();
   const linkWeights = await GetLinkWeights();
 
-const sgd= new SGDRunner(nodes,links,linkWeights);
+  const sgd = new SGDRunner(nodes, links, linkWeights);
+  sgd.Run();
 
 
   const nodeColors = await GetNodeColors();

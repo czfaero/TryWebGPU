@@ -1,8 +1,8 @@
 
 class Edge {
     constructor(
-        public i: number,
-        public j: number,
+        public u: number,
+        public v: number,
         public w: number
     ) { }
 }
@@ -48,9 +48,10 @@ export class SGDRunner {
 
         while (!etaCurr.done) {
             const eta = etaCurr.value as number;
+            console.log(eta)
             for (let index = 0; index < this.edgeCount; index++) {
                 const edge = this.getEdge(index);
-                const v1 = this.getVertex(edge.i), v2 = this.getVertex(edge.j)
+                const v1 = this.getVertex(edge.u), v2 = this.getVertex(edge.v)
                 const d = this.ShortestPath(edge);
                 const w = d * d;
                 const mu = Math.min(1, w * eta);
@@ -59,8 +60,8 @@ export class SGDRunner {
                 const r = this.VectorScale(p, (l - d) / 2 / l);
 
                 this.VectorScale(r, mu, r); // r = mur
-                this.VectorAddScale(r, v1, 1, this.vertexBuffer, edge.i * this.vertexDimension);
-                this.VectorAddScale(r, v2, -1, this.vertexBuffer, edge.j * this.vertexDimension);
+                this.VectorAddScale(r, v1, 1, this.vertexBuffer, edge.u * this.vertexDimension);
+                this.VectorAddScale(r, v2, -1, this.vertexBuffer, edge.v * this.vertexDimension);
             }
             etaCurr = etaIter.next();
         }
@@ -68,18 +69,44 @@ export class SGDRunner {
 
 
     ShortestPath(e: Edge): number {
-        // Bellman–Ford
-        if (e.i in this.shortestPathCache) {
-            const r = this.shortestPathCache[e.i];
-            if (e.j in r) {
-                return r[e.j];
+        if (e.u in this.shortestPathCache) {
+            const r = this.shortestPathCache[e.u];
+            if (e.v in r) {
+                return r[e.v];
             } else {
                 throw "";
             }
-        } else {
-            this.shortestPathCache[e.i] = {}
+        }
+        // Bellman–Ford
+        let distance = new Float32Array(this.vertexCount);
+        let predecessor = new Array(this.vertexCount);
+        distance.fill(Infinity);
+        distance[e.u] = 0;
+
+        // step 2
+        for (let ii = 0; ii < this.vertexCount - 1; ii++)
+            for (let i = 0; i < this.edgeCount; i++) {
+                const edge = this.getEdge(i);
+                if (distance[edge.u] + edge.w < distance[edge.v]) {
+                    distance[edge.v] = distance[edge.u] + edge.w;
+                    predecessor[edge.v] = edge.u;
+                }
+
+            }
+
+        // step 3 
+        for (let i = 0; i < this.edgeCount; i++) {
+            const edge = this.getEdge(i);
+            if (distance[edge.u] + edge.w < distance[edge.v]) {
+                if (distance[edge.u] + edge.w < distance[edge.v]) {
+                    console.log("negative-weight cycle");break;
+                   // throw "negative-weight cycle";
+                }
+            }
         }
 
+        this.shortestPathCache[e.u] = distance;
+        return this.shortestPathCache[e.u][e.v];
     }
 
 
