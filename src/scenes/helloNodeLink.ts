@@ -36,10 +36,6 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   // 
   const nodes = await GetNodes();
   const links = await GetLinks();
-  const linkWeights = await GetLinkWeights();
-
-  const sgd = new SGDRunner(nodes, links, linkWeights);
-  sgd.Run();
 
 
   const nodeColors = await GetNodeColors();
@@ -257,7 +253,7 @@ const init = async (canvasElement: HTMLCanvasElement) => {
   const aspect = presentationSize[0] / presentationSize[1];
   const projectionMatrix = mat4.create();
 
-  const uniformBufferSize = 4 * 4 * 4 + 4 * 3; //  float32 4x4 matrix, vec3<f32>;
+  const uniformBufferSize =Math.max(4 * 4 * 4 + 4 * 3,80); //  float32 4x4 matrix, vec3<f32>;
   const uniformBufferData = new Float32Array(uniformBufferSize / 4);
 
   const uniformBuffer = device.createBuffer({

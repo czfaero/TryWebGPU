@@ -9,6 +9,7 @@ class Link {
 let rawData: string = null;
 let links: Array<Link> = [];
 let size = 0;
+let vertex: Float32Array = null;
 async function LoadData() {
     if (rawData) return;
     let r = await fetch("/1138_bus.mtx");
@@ -29,21 +30,17 @@ async function LoadData() {
             links.push({ m: m - 1, n: n - 1, v: v });
         }
     }
+    let r2 = await (await fetch("/1138_bus.bin")).arrayBuffer();
+    vertex = new Float32Array(r2);
+    vertex = vertex.map(v => v * 2);
+    console.log("vertex bin size:" + vertex.length)
+    console.log("size:" + size)
+
 }
 
 export const GetNodes = async function () {
     await LoadData();
-
-    const iterable = (function* () {
-        for (let i = 0; i < size; i++) {
-            yield 0;
-            yield 0;
-            yield 0;
-        }
-    })();
-    const nodes = new Float32Array(iterable);
-    console.log(nodes.length);
-    return nodes;
+    return vertex;
 }
 export const GetLinks = async function () {
     await LoadData();
@@ -58,7 +55,7 @@ export const GetLinks = async function () {
     })();
 
     const _links = new Uint32Array(iterable);
-    console.log(_links.length);
+    console.log("Link count: " + _links.length);
     return _links;
 }
 
@@ -82,12 +79,12 @@ export const GetNodeColors = async function () {
     await LoadData();
     const iterable = (function* () {
         for (let i = 0; i < size; i++) {
-            yield 0;
+            yield 1;
             yield 0;
             yield 0;
         }
     })();
     const nodes = new Float32Array(iterable);
-    console.log(nodes.length);
+    console.log("color count: " + nodes.length);
     return nodes;
 }
